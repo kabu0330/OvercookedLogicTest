@@ -14,6 +14,7 @@ public:
     void Add(T _T) {}
     void Empty() {}
     void Sort() {}
+    bool operator==(const TArray<T>& _T) {}
 };
 
 class Global
@@ -63,8 +64,19 @@ struct FRecipe
 struct FOrder
 {
     TArray<EIngredientType> Dish; // 김 + 밥 + 오이 = 오이김밥 
-    //                              FRecipe와 비교할 operator==(const FRecipe&) 함수가 있으면 좋을듯
-    //                              비교 전에 Sort 필수
+
+    bool operator==(FRecipe Recipe) 
+    {
+        // Sort하고 비교
+        Dish.Sort();
+        Recipe.Recipe.Sort();
+        if (Dish == Recipe.Recipe)
+        {
+            return true;
+        }
+        return false;
+    }
+
 };
 
 // 요리 재료 클래스
