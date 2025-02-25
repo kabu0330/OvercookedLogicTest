@@ -19,7 +19,7 @@ public:
 class Global
 {
 public:
-    static class TArray<FOrder>& GetOrderList();
+    static class TArray<FOrder>& GetOrderList() {}
 };
 
 // 재료 상태
@@ -27,7 +27,7 @@ enum class EIngredientState
 {
     OVERCOOKED = -2, // 태워서 재료로 사용할 수 없음
     NONE = -1,
-    COOKED,     // 조리 완성
+    COOKED,     // 조리 완성 => Plate에 올라갈 수 있는 유일한 조건
     CHOPPABLE,  // 썰기 전
     GRILLABLE,  // 굽기 전
     FRYABLE,    // 튀기기 전
@@ -50,19 +50,21 @@ enum class EIngredientType
 // 요리에 들어갈 재료
 struct FCookableIngredient
 {
-    class AIngredient* Ingredient;     // 초밥   , 밥
+    EIngredientType IngredientType;       //  물고기 , 밥
     EIngredientState IngredientState; // 슬라이스, 취사
 };
 
 // 요리의 레시피
 struct FRecipe
 {
-    TArray<class AIngredient*> Recipe; // 밥 + 김 + 오이 = 오이김밥
+    TArray<EIngredientType> Recipe; // 밥 + 김 + 오이 = 오이김밥
 };
 
 struct FOrder
 {
-    TArray<class AIngredient*> Dish;
+    TArray<EIngredientType> Dish; // 김 + 밥 + 오이 = 오이김밥 
+    //                              FRecipe와 비교할 operator==(const FRecipe&) 함수가 있으면 좋을듯
+    //                              비교 전에 Sort 필수
 };
 
 // 요리 재료 클래스
@@ -72,16 +74,15 @@ class AIngredient : public AActor
 public:
     bool IsCooked() const // 조리 완료
     {
-        return Ingredient.IngredientState== EIngredientState::COOKED;
+        return IngredientData.IngredientState== EIngredientState::COOKED;
     }
     bool IsChoppable() const // 손질하는 재료냐
     {
-        return Ingredient.IngredientState == EIngredientState::CHOPPABLE;
+        return IngredientData.IngredientState == EIngredientState::CHOPPABLE;
     }
 
     FString Name;
-    FCookableIngredient Ingredient;
-    EIngredientType IngredientType;
+    FCookableIngredient IngredientData;
     float CookingTime = 0.0f;
     float OvercookTime = 0.0f;
 };
@@ -92,14 +93,16 @@ class Cook
 public:
     static void Chop(AIngredient* Ingredient)
     {
-        // Chopping Logic
+        // Chopping Logic <= 어떻게 Time을 잴 것인가? 이 함수는 1회성 호출 함수에, Actor 상속이 아닌데... 또 함수 포인터?
+        // 다른 로직을 생각해야하나?
+        
         // 일정 시간 이후
-        Ingredient->Ingredient.IngredientState = EIngredientState::COOKED; // 조리완료
+        Ingredient->IngredientData.IngredientState = EIngredientState::COOKED; // 조리완료
     }
     static void Grill(AIngredient* Ingredient)
     {
         // Grilling Logic
-        Ingredient->Ingredient.IngredientState = EIngredientState::COOKED; // 조리완료
+        Ingredient->IngredientData.IngredientState = EIngredientState::COOKED; // 조리완료
     }
     static void Cooking(AIngredient* Ingredient, std::function<void(AIngredient*)> CookingFunction)
     {
@@ -141,13 +144,13 @@ public:
             return false;
         }
         // 조건 2. 재료가 손질이 안된 상태면 리턴
-        if (nullptr == Ingredient || Ingredient->Ingredient.IngredientState != EIngredientState::COOKED)
+        if (nullptr == Ingredient || Ingredient->IngredientData.IngredientState != EIngredientState::COOKED)
         {
             return false;
         }
         // if 조합이 불가한 재료들 끼리인 것을 어떻게 아는가?
 
-        Recipe.Recipe.Add(Ingredient);
+        Recipe.Recipe.Add(Ingredient->IngredientData.IngredientType);
         IsCompleteDish();
 
         return true;
@@ -170,6 +173,9 @@ public:
         return false;
     }
 
+    // 재료가 추가될 때 마다 메시를 바꿔준다.
+    void SetMeshArrayIndex(int MeshIndex) {}
+
 private:
     EPlateState PlateState = EPlateState::NONE;
     TArray<AIngredient*> Ingredients;
@@ -191,19 +197,25 @@ class ATable : public AActor
 public:
     void PlacePlate(APlate* Plate)
     {
-        PlacedPlate = Plate;
+        // 테이블에 접시가 없어야 다른 접시를 올릴 수 있다.
+        if (nullptr == PlacedPlate) 
+        {
+            PlacedPlate = Plate;
+        }
     }
     bool PlaceIngredient(AIngredient* Ingredient)
     {
-        if (false == PlacedPlate->AddIngredient(Ingredient))
+        // 테이블에서 재료를 올릴 땐, Plate가 처리해.
+        if (true == PlacedPlate->Add(Ingredient))
         {
-            return;
+            // 내가 무슨 재료랑 합쳐질 줄 알고 어떻게 메시를 바꾸지?
+            PlacedPlate->SetMeshArrayIndex(1);
+            return true;
         }      
-        Ingredients.Add(Ingredient);
+        return false;
     }
 
 private:
-    TArray<AIngredient*> Ingredients;
     APlate* PlacedPlate;
 };
 
